@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tris</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica', sans-serif;
+            background-color: #f0f0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+        }
+
+        .status {
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.2rem;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 2rem;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #fff;
+            border: 2px solid #333;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cell:hover {
+            background-color: #f8f8f8;
+        }
+
+        .cell.x {
+            color: #e74c3c;
+        }
+
+        .cell.o {
+            color: #3498db;
+        }
+
+        .cell.ai-thinking {
+            background-color: #f0f0f0;
+            cursor: not-allowed;
+        }
+
+        .reset-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .reset-btn:hover {
+            background-color: #45a049;
+        }
+
+        .message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .message.win {
+            background-color: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        .message.draw {
+            background-color: #fff3cd;
+            color: #856404;
+            display: block;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .mode-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            margin: 0.5rem;
+            font-size: 1.2rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 250px;
+        }
+
+        .mode-btn:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .mode-btn:active {
+            transform: translateY(0);
+        }
+
+        .mode-description {
+            color: #666;
+            margin: 1rem 0;
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 400px) {
+            .cell {
+                width: 80px;
+                height: 80px;
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tris</h1>
+        <div class="status" id="status">Seleziona una modalità di gioco</div>
+        <div class="board" id="board">
+            <!-- Cells will be created by JavaScript -->
+        </div>
+        <button class="reset-btn" onclick="resetGame()">Nuova Partita</button>
+        <div class="message" id="message"></div>
+    </div>
+
+    <!-- Modal for game mode selection -->
+    <div class="modal active" id="modeModal">
+        <div class="modal-content">
+            <h2>Scegli la modalità di gioco</h2>
+            <button class="mode-btn" onclick="setGameMode('ai')">
+                Gioca in Solo
+            </button>
+            <button class="mode-btn" onclick="setGameMode('duo')">
+                Gioca in Due
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentPlayer = 'X';
+        let gameOver = false;
+        let gameMode = null;
+
+        // Create board cells
+        const board = document.getElementById('board');
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.row = i;
+                cell.dataset.col = j;
+                cell.addEventListener('click', () => makeMove(i, j));
+                board.appendChild(cell);
+            }
+        }
+
+        function updateBoard(boardState) {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                const value = boardState[row][col];
+                cell.textContent = value;
+                cell.className = 'cell' + (value ? ` ${value.toLowerCase()}` : '');
+            });
+        }
+
+        function updateStatus(player) {
+            document.getElementById('status').textContent = `Turno del giocatore: ${player}`;
+        }
+
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.className = `message ${type}`;
+        }
+
+        function setGameMode(mode) {
+            fetch('/set_mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ mode }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                gameMode = mode;
+                updateBoard(data.board);
+                updateStatus('X');
+                gameOver = false;
+                document.getElementById('message').className = 'message';
+                // Hide the modal
+                document.getElementById('modeModal').classList.remove('active');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Si è verificato un errore. Riprova.');
+            });
+        }
+
+        async function makeMove(row, col) {
+            if (gameOver || !gameMode) return;
+
+            try {
+                const response = await fetch('/make_move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ row, col }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    updateBoard(data.board);
+                    
+                    if (data.ai_move) {
+                        // Highlight AI's move
+                        const aiCell = document.querySelector(`[data-row="${data.ai_move.row}"][data-col="${data.ai_move.col}"]`);
+                        aiCell.classList.add('ai-thinking');
+                        setTimeout(() => {
+                            aiCell.classList.remove('ai-thinking');
+                        }, 500);
+                    }
+
+                    if (data.game_over) {
+                        gameOver = true;
+                        if (data.winner) {
+                            showMessage(`Il giocatore ${data.winner} ha vinto!`, 'win');
+                        } else if (data.draw) {
+                            showMessage('Pareggio!', 'draw');
+                        }
+                    } else {
+                        currentPlayer = data.current_player;
+                        updateStatus(currentPlayer);
+                    }
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Si è verificato un errore. Riprova.');
+            }
+        }
+
+        async function resetGame() {
+            if (!gameMode) {
+                alert('Seleziona prima una modalità di gioco');
+                return;
+            }
+
+            try {
+                const response = await fetch('/reset', {
+                    method: 'POST',
+                });
+
+                const data = await response.json();
+                updateBoard(data.board);
+                currentPlayer = data.current_player;
+                updateStatus(currentPlayer);
+                gameOver = false;
+                document.getElementById('message').className = 'message';
+                // Show the modal again
+                document.getElementById('modeModal').classList.add('active');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Si è verificato un errore. Riprova.');
+            }
+        }
+    </script>
+</body>
+</html> 
